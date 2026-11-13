@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#142d3b"><title>Smash Club</title>
+<style>
+:root{--navy:#142d3b;--bg:#f3f6f7;--ink:#17252d;--muted:#687780;--line:#e1e8eb;--green:#087b52;--red:#b42318}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,sans-serif}.app{max-width:650px;margin:auto;padding:14px 14px 40px}.hero{background:var(--navy);color:white;border-radius:20px;padding:20px;margin-bottom:14px}.sub{color:#c5d8dd;font-size:12px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.stats strong{display:block;font-size:24px}.stats span{font-size:12px;color:#c5d8dd}.nav{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px}button{border:0;border-radius:11px;padding:11px 13px;background:#e9eff1;color:var(--ink);font:inherit;font-weight:650}.nav .active,.primary{background:var(--navy);color:white}#activePanel{width:100%;min-width:0}.panel,.card{background:white;border:1px solid var(--line);border-radius:15px;padding:15px;margin-bottom:12px}h2{font-size:18px;margin:4px 0 12px}label{display:block;font-size:12px;color:var(--muted);margin:9px 0 5px}input,select{width:100%;padding:12px;border:1px solid #d6e0e4;border-radius:10px;background:white;color:var(--ink);font:inherit}.row,.between{display:flex;gap:8px;align-items:center}.between{justify-content:space-between}.row>*{flex:1}.full{width:100%;margin-top:10px}.muted,.note{color:var(--muted);font-size:12px;line-height:1.5}.hidden{display:none!important}.player{padding:9px 0;border-bottom:1px solid var(--line)}.badge{font-size:11px;background:#edf3f4;padding:4px 8px;border-radius:20px}.good{color:var(--green);font-weight:750}.bad{color:var(--red);font-weight:750}.empty{background:#f7f9fa;border-radius:12px;padding:20px;text-align:center;color:var(--muted)}table{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:650;background:#f7f9fa}.tablewrap{overflow-x:auto}.zero{font-weight:800;color:var(--green)}.plactions{flex:0 0 auto;gap:6px}.plactions button{padding:6px 10px;font-size:12px;font-weight:600}
+
+@media(max-width:700px){
+ .app{width:100%;max-width:560px;margin:0 auto;padding:12px 12px 32px}
+ .hero{display:block;width:100%;padding:18px;border-radius:18px;margin:0 0 14px}
+ .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:18px}
+ .stats>div{min-width:0}
+ .stats strong{font-size:25px}
+ .stats span{font-size:12px}
+ .nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .nav button{padding:11px 5px;font-size:14px}
+ #tournament,#players,#history,#activePanel{display:block;width:100%;min-width:0}
+ #activePanel .panel,.panel,.card{width:100%;min-width:0;padding:14px}
+ #activePanel label{margin-top:12px}
+ #activePanel select,#activePanel input{display:block;width:100%;max-width:100%;min-height:46px}
+ #activePanel h3{margin:18px 0 8px;font-size:16px}
+ #activePanel .row{display:flex;flex-direction:column;gap:8px}
+ #activePanel button{display:block;width:100%;min-height:48px}
+ input,select,button{min-width:0;font-size:16px}
+ .row{align-items:stretch}
+ .row>*{min-width:0}
+ .between{flex-wrap:wrap}
+ .tablewrap{width:100%;overflow-x:auto}
+ table{min-width:420px}
+}
+button{line-height:1.25;white-space:normal}
+</style></head><body><main class="app">
+<header class="hero"><b>🏸 SMASH CLUB</b><div class="sub">TOURNAMENTS • JOKER ROTATION • PLAYER POINTS</div><div class="stats"><div><strong id="pc">0</strong><span>Players</span></div><div><strong id="tc">0</strong><span>Tournaments</span></div><div><strong id="currentStat">—</strong><span>Current</span></div></div></header>
+<nav class="nav"><button class="active" data-tab="tournament">Tournament</button><button data-tab="players">Players</button><button data-tab="history">History</button></nav>
+<section id="tournament"><div class="panel"><h2>Start tournament</h2><label>Tournament name</label><input id="name" placeholder="e.g. Friday Smash"><label>Choose participants</label><div id="pick"></div><div class="muted" id="pickCount">0 selected</div><button id="start" class="primary full" disabled>Start tournament</button></div><div id="activePanel"></div></section>
+<section id="players" class="hidden"><div class="panel"><h2>Players</h2><div class="row"><input id="newPlayer" placeholder="Player name"><button id="add" class="primary">Add</button></div><p class="muted">Renaming updates this player everywhere, including past tournament history. Deleting removes them from the roster for future tournaments but keeps their past results in the history table and leaderboard.</p></div><div id="plist" class="card"></div></section>
+<section id="history" class="hidden"><h2>Tournament history</h2><div id="hist"></div><h2>All tournaments - points by player</h2><div id="overview"></div><h2>Overall leaderboard</h2><div id="leader"></div></section>
+<p class="note">Records are saved in this browser on this device. Export backups regularly.</p><div class="row"><button id="export">Export backup</button><button id="import">Import backup</button><input id="file" type="file" accept="application/json" class="hidden"></div>
+</main><script>
+const KEY='smashClubZeroSumV3';let db={players:[],events:[],current:null};try{db=JSON.parse(localStorage.getItem(KEY))||db}catch(e){}let selected=new Set();const $=x=>document.getElementById(x),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const fmt=n=>(n>0?'+':'')+Number(n).toFixed(Number(n)%1?1:0);
+function save(){localStorage.setItem(KEY,JSON.stringify(db));render()}function tab(x){document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===x));['tournament','players','history'].forEach(y=>$(y).classList.toggle('hidden',x!==y))}document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+function allPlayersEver(){
+var set={};
+var out=[];
+function add(p){if(!set[p]){set[p]=true;out.push(p);}}
+db.players.forEach(add);
+db.events.forEach(function(t){t.players.forEach(add);});
+if(db.current)db.current.players.forEach(add);
+return out;
+}
+function replaceAll(str,oldName,newName){return str.split(oldName).join(newName);}
+function renamePlayer(oldName,newName){
+newName=newName.trim();
+if(!newName)return alert('Name cannot be empty');
+if(newName!==oldName&&db.players.some(function(p){return p.toLowerCase()===newName.toLowerCase();}))return alert('A player with that name already exists');
+var idx=db.players.indexOf(oldName);
+if(idx===-1)return;
+db.players[idx]=newName;
+if(selected.has(oldName)){selected.delete(oldName);selected.add(newName);}
+if(db.current){
+db.current.players=db.current.players.map(function(p){return p===oldName?newName:p;});
+if(db.current.jokerName===oldName)db.current.jokerName=newName;
+}
+db.events.forEach(function(t){
+t.players=t.players.map(function(p){return p===oldName?newName:p;});
+if(t.points&&Object.prototype.hasOwnProperty.call(t.points,oldName)){
+t.points[newName]=t.points[oldName];
+delete t.points[oldName];
+}
+if(t.jokerName===oldName)t.jokerName=newName;
+if(t.rows){
+t.rows.forEach(function(r){
+if(r.points&&Object.prototype.hasOwnProperty.call(r.points,oldName)){
+r.points[newName]=r.points[oldName];
+delete r.points[oldName];
+}
+if(typeof r.label==='string')r.label=replaceAll(r.label,oldName,newName);
+if(typeof r.winner==='string')r.winner=replaceAll(r.winner,oldName,newName);
+});
+}
+});
+save();
+}
+function deletePlayer(name){
+var activeWarn=(db.current&&db.current.players.indexOf(name)!==-1)?' This player is part of the currently active tournament; the active tournament keeps its own player list and will not be affected.':'';
+if(!confirm('Remove '+name+' from the roster?'+activeWarn+' Past tournament history and leaderboard points for this player are kept for record-keeping, and they will no longer be selectable for new tournaments.'))return;
+db.players=db.players.filter(function(p){return p!==name;});
+selected.delete(name);
+save();
+}
+function render(){$('pc').textContent=db.players.length;$('tc').textContent=db.events.length;$('currentStat').textContent=db.current?'Active':'—';
+$('pick').innerHTML=db.players.map(function(p){return '<label><input type="checkbox" data-pick="'+esc(p)+'" '+(selected.has(p)?'checked':'')+' style="width:auto;margin-right:8px">'+esc(p)+'</label>';}).join('')||'<p class="muted">Add players first.</p>';$('pickCount').textContent=selected.size+' selected';$('start').disabled=selected.size<4||!!db.current;
+$('plist').innerHTML=db.players.map(function(p){return '<div class="player between"><span>'+esc(p)+'</span><span class="row plactions"><button data-rename="'+esc(p)+'">Rename</button><button data-delpl="'+esc(p)+'" style="background:#fff0ef;color:#b42318">Delete</button></span></div>';}).join('')||'<div class="empty">No players yet.</div>';
+$('activePanel').innerHTML=db.current?activeHTML(db.current):'';
+if(db.current){var n0=db.current.players.length;if(n0%2===0){if(n0===8){refreshQuadDropdowns();}else{refreshEvenDropdowns();if(n0===6)updateFinalTeamInfo();}}else{if(n0===7){refreshSevenDropdowns();}else{refreshJokerDropdowns();}}}
+$('hist').innerHTML=db.events.length?db.events.slice().reverse().map(function(t){return '<div class="card"><div class="between"><b>'+esc(t.name)+'</b><span class="badge">'+esc(t.mode)+' · '+t.players.length+' players</span></div><div class="muted">'+esc(t.date)+' · Completed'+(t.jokerName?' · Joker: '+esc(t.jokerName):'')+'</div><div class="row"><button class="full" data-detail="'+t.id+'">View match &amp; points table</button><button class="full" data-delete="'+t.id+'" style="background:#fff0ef;color:#b42318">Delete</button></div><div id="detail-'+t.id+'" class="hidden">'+table(t)+'</div></div>';}).join(''):'<div class="empty">No completed tournaments.</div>';
+var totals={};allPlayersEver().forEach(function(p){totals[p]=0;});db.events.forEach(function(t){Object.entries(t.points).forEach(function(pair){totals[pair[0]]=(totals[pair[0]]||0)+pair[1];});});
+$('overview').innerHTML=allTable(totals);
+$('leader').innerHTML=Object.entries(totals).sort(function(a,b){return b[1]-a[1];}).map(function(pair){var v=pair[1];return '<div class="between player"><b>'+esc(pair[0])+'</b><b class="'+(v>0?'good':(v<0?'bad':''))+'">'+fmt(v)+'</b></div>';}).join('')||'<div class="empty">No results yet.</div>';
+}
+function allTable(totals){
+var events=db.events;
+if(!events.length)return '<div class="empty">No completed tournaments yet.</div>';
+var playersSorted=allPlayersEver().slice().sort(function(a,b){return (totals[b]||0)-(totals[a]||0);});
+var cols=['Player'];
+events.forEach(function(t){cols.push(t.name);});
+cols.push('Accumulated');
+var theadCols=cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('');
+var body=playersSorted.map(function(p){
+var cells=events.map(function(t){
+var played=t.players.indexOf(p)!==-1;
+if(!played)return '<td class="muted">-</td>';
+var v=(t.points&&typeof t.points[p]==='number')?t.points[p]:0;
+return '<td class="'+(v>0?'good':(v<0?'bad':''))+'">'+fmt(v)+'</td>';
+}).join('');
+var tot=totals[p]||0;
+return '<tr><td>'+esc(p)+'</td>'+cells+'<td><b class="'+(tot>0?'good':(tot<0?'bad':''))+'">'+fmt(tot)+'</b></td></tr>';
+}).join('');
+var colTotals=events.map(function(t){return Object.values(t.points).reduce(function(a,b){return a+b;},0);});
+var grandAll=Object.values(totals).reduce(function(a,b){return a+b;},0);
+var totalsCells=colTotals.map(function(v){return '<th class="'+(v===0?'zero':'bad')+'">'+fmt(v)+'</th>';}).join('');
+return '<div class="tablewrap"><table><thead><tr>'+theadCols+'</tr></thead><tbody>'+body+'<tr><th>Match total</th>'+totalsCells+'<th class="'+(grandAll===0?'zero':'bad')+'">'+fmt(grandAll)+'</th></tr></tbody></table></div><p class="note">Each tournament column should total 0; the Accumulated column is each players running total across all tournaments, including players later removed from the active roster.</p>';
+}
+function activeHTML(t){
+var odd=t.players.length%2;
+var modeLabel=odd?'Joker':(t.players.length===6?'Trio':(t.players.length===8?'Semis':'Even'));
+var h='<div class="panel"><div class="between"><h2>'+esc(t.name)+'</h2><span class="badge">'+modeLabel+' · '+t.players.length+'</span></div><p class="muted">Players: '+t.players.map(esc).join(', ')+'</p>';
+if(!odd&&t.players.length===6){
+h+='<h3>Match 1 - Winning doubles</h3>'+sel('winner1','Winner 1',t.players)+sel('winner2','Winner 2',t.players)+'<h3>Match 1 - Losing doubles</h3>'+sel('loser1','Loser 1',t.players)+sel('loser2','Loser 2',t.players)+'<p class="muted" id="finalTeamInfo">Select all four Match 1 players to determine the Final team.</p><h3>Final match</h3><label>Final match winner</label><select id="finalWinner"><option value="">Select winner</option><option value="round1">Match 1 winners</option><option value="finalteam">Final team</option></select><p class="note">The two players not picked for Match 1 form the Final team and face the Match 1 winners. The final winning team receives 50 points each player; both other teams receive -25 points each player. Match total = 0.</p><button class="primary full" id="finishTrio">Complete tournament</button>';
+}else if(!odd&&t.players.length===8){
+h+='<h3>Semifinal 1 - Winning doubles</h3>'+sel('winner1','Winner 1',t.players)+sel('winner2','Winner 2',t.players)+'<h3>Semifinal 1 - Losing doubles</h3>'+sel('loser1','Loser 1',t.players)+sel('loser2','Loser 2',t.players)+'<p class="muted" id="sf2Info">Select all four Semifinal 1 players to determine the Semifinal 2 players.</p><h3>Semifinal 2 - Winning doubles</h3>'+sel('winner3','Winner 3',[])+sel('winner4','Winner 4',[])+'<p class="muted">The other two Semifinal 2 players are automatically the losing pair of that match.</p><h3>Final</h3><label>Final winner</label><select id="finalWinner"><option value="">Select winner</option><option value="sf1">Semifinal 1 winners</option><option value="sf2">Semifinal 2 winners</option></select><p class="note">Semifinal matches determine the two finalist pairs and score 0. Final winners receive 75 points each; the other six players each receive -25 points. Match total = 0.</p><button class="primary full" id="finishQuad">Complete tournament</button>';
+}else if(!odd){
+h+='<h3>Winning doubles</h3>'+sel('winner1','Winner 1',t.players)+sel('winner2','Winner 2',t.players)+'<h3>Losing doubles</h3>'+sel('loser1','Loser 1',t.players)+sel('loser2','Loser 2',t.players)+'<p class="note">Each winner receives '+((t.players.length-2)*25/2)+' points; each losing player receives the same amount as a negative score. Other participants receive 0. Match total = 0.</p><button class="primary full" id="finishEven">Complete tournament</button>';
+}else if(t.players.length===7){
+h+='<label>Joker</label><select id="joker7">'+opts(t.players)+'</select><h3>Match 1 - Winning doubles</h3>'+sel('m1w1','Winner 1',t.players)+sel('m1w2','Winner 2',t.players)+'<h3>Match 1 - Losing doubles</h3>'+sel('m1l1','Loser 1',t.players)+sel('m1l2','Loser 2',t.players)+'<p class="muted" id="sevenInfo">Select the Joker and all four Match 1 players to continue.</p><h3>Match 2</h3><p class="muted">Team 1 is automatically the two players who sat out Match 1.</p><label>Jokers partner for Match 2 (pick one Match 1 loser)</label><select id="jokerPartner"><option value="">Select partner</option></select><label>Match 2 winner</label><select id="m2Winner"><option value="">Select winner</option><option value="team1">Sat-out pair</option><option value="team2">Joker + partner</option></select><h3>Final</h3><label>Final winner</label><select id="finalWinner7"><option value="">Select winner</option><option value="match1">Match 1 winners</option><option value="match2">Match 2 winners</option></select><p class="note">Match 1 and Match 2 score 0 for everyone. If the sat-out pair reaches the Final: the two Final winners get +75 each, the Match 1 loser who partnered the Joker in Match 2 gets -50, everyone else gets -25. If the Jokers team (Joker + partner) reaches the Final: Joker team wins -&gt; Joker +75, partner +50, rest -25; other team wins -&gt; both Match 1 winners +75, Jokers partner -50, rest -25. Match total = 0.</p><button class="primary full" id="finishSeven">Complete tournament</button>';
+}else{
+h+='<label>Joker</label><select id="joker">'+opts(t.players)+'</select><h3>Initial winning doubles (Joker cannot play in this match)</h3>'+sel('first1','Winner 1',t.players)+sel('first2','Winner 2',t.players)+'<h3>Joker challenge</h3><label>Jokers partner (choose another participant)</label><select id="partner">'+opts(t.players)+'</select><label>Challenge winner</label><select id="challenge"><option value="">Select winner</option><option value="joker">Joker + partner</option><option value="first">Initial winning pair</option></select><p class="note">Designed for exactly 5 participants. The selected Joker is excluded from the initial-match dropdowns.<br>Match 1 (Joker sits out): the two winners get +25 each, the two losers get -25 each.<br>Joker Challenge: if the initial winners win again, they net +50 each overall, the Joker nets -25, the challenge partner nets -50 (lost both matches), and the uninvolved fifth player nets -25.<br>If the Jokers team wins the challenge instead, the Joker nets +50 overall, the partner nets +25 overall, and the other three players net -25 each.<br>Match total = 0 either way.</p><button class="primary full" id="finishOdd">Complete tournament</button>';
+}
+h+='<button class="full" id="cancel">Cancel tournament</button></div>';
+return h;
+}
+function opts(a){return '<option value="">Select player</option>'+a.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');}
+function sel(id,label,a){return '<label>'+label+'</label><select id="'+id+'">'+opts(a)+'</select>';}
+function refreshEvenDropdowns(){
+var t=db.current;if(!t||t.players.length%2!==0)return;
+var ids=['winner1','winner2','loser1','loser2'];
+var els=ids.map(function(id){return $(id);});
+for(var i=0;i<els.length;i++){if(!els[i])return;}
+var values=els.map(function(x){return x.value;});
+for(var i=0;i<ids.length;i++){
+var choices=t.players.filter(function(p){
+for(var j=0;j<values.length;j++){if(j!==i&&values[j]===p)return false;}
+return true;
+});
+els[i].innerHTML=opts(choices);
+if(values[i]&&choices.indexOf(values[i])!==-1)els[i].value=values[i];
+}
+}
+function updateFinalTeamInfo(){
+var t=db.current;if(!t||t.players.length!==6)return;
+var info=$('finalTeamInfo');if(!info)return;
+var a=$('winner1')?$('winner1').value:'',b=$('winner2')?$('winner2').value:'',c=$('loser1')?$('loser1').value:'',d=$('loser2')?$('loser2').value:'';
+if(a&&b&&c&&d&&(new Set([a,b,c,d])).size===4){
+var finalTeam=t.players.filter(function(p){return [a,b,c,d].indexOf(p)===-1;});
+info.textContent='Final team (sat out Match 1): '+finalTeam.join(' + ');
+}else{
+info.textContent='Select all four Match 1 players to determine the Final team.';
+}
+}
+function refreshQuadDropdowns(){
+var t=db.current;if(!t||t.players.length!==8)return;
+refreshEvenDropdowns();
+var w1=$('winner1')?$('winner1').value:'',w2=$('winner2')?$('winner2').value:'',l1=$('loser1')?$('loser1').value:'',l2=$('loser2')?$('loser2').value:'';
+var info=$('sf2Info');
+var w3=$('winner3'),w4=$('winner4');
+if(w1&&w2&&l1&&l2&&(new Set([w1,w2,l1,l2])).size===4){
+var sf2Group=t.players.filter(function(p){return [w1,w2,l1,l2].indexOf(p)===-1;});
+if(info)info.textContent='Semifinal 2 players: '+sf2Group.join(', ');
+if(w3&&w4){
+var old3=w3.value,old4=w4.value;
+w3.innerHTML=opts(sf2Group.filter(function(p){return p!==old4;}));
+w4.innerHTML=opts(sf2Group.filter(function(p){return p!==old3;}));
+if(sf2Group.indexOf(old3)!==-1)w3.value=old3;
+if(sf2Group.indexOf(old4)!==-1&&old4!==w3.value)w4.value=old4;
+}
+}else{
+if(info)info.textContent='Select all four Semifinal 1 players to determine the Semifinal 2 players.';
+if(w3&&w4){w3.innerHTML=opts([]);w4.innerHTML=opts([]);}
+}
+}
+function refreshSevenDropdowns(){
+var t=db.current;if(!t||t.players.length!==7)return;
+var jokerEl=$('joker7');var joker=jokerEl?jokerEl.value:'';
+var w1=$('m1w1'),w2=$('m1w2'),l1=$('m1l1'),l2=$('m1l2');
+if(!w1||!w2||!l1||!l2)return;
+var eligible=t.players.filter(function(p){return p!==joker;});
+var ids=['m1w1','m1w2','m1l1','m1l2'];
+var els=[w1,w2,l1,l2];
+var values=els.map(function(x){return x.value;});
+for(var i=0;i<ids.length;i++){
+var choices=eligible.filter(function(p){
+for(var j=0;j<values.length;j++){if(j!==i&&values[j]===p)return false;}
+return true;
+});
+els[i].innerHTML=opts(choices);
+if(values[i]&&choices.indexOf(values[i])!==-1)els[i].value=values[i];
+}
+updateSevenInfo();
+}
+function updateSevenInfo(){
+var t=db.current;if(!t||t.players.length!==7)return;
+var info=$('sevenInfo');
+var jokerEl=$('joker7');var joker=jokerEl?jokerEl.value:'';
+var w1=$('m1w1')?$('m1w1').value:'',w2=$('m1w2')?$('m1w2').value:'',l1=$('m1l1')?$('m1l1').value:'',l2=$('m1l2')?$('m1l2').value:'';
+var partnerSel=$('jokerPartner');
+if(joker&&w1&&w2&&l1&&l2&&(new Set([joker,w1,w2,l1,l2])).size===5){
+var sitOut=t.players.filter(function(p){return p!==joker&&[w1,w2,l1,l2].indexOf(p)===-1;});
+if(info)info.textContent='Match 2 Team 1 (sat out Match 1): '+sitOut.join(' + ');
+if(partnerSel){
+var old=partnerSel.value;
+partnerSel.innerHTML=opts([l1,l2]);
+if([l1,l2].indexOf(old)!==-1)partnerSel.value=old;
+}
+}else{
+if(info)info.textContent='Select the Joker and all four Match 1 players to continue.';
+if(partnerSel)partnerSel.innerHTML='<option value="">Select partner</option>';
+}
+}
+function refreshJokerDropdowns(){
+var t=db.current;if(!t||t.players.length%2===0)return;
+var jokerEl=$('joker');var joker=jokerEl?jokerEl.value:'';
+var first1=$('first1'),first2=$('first2'),partner=$('partner');
+if(!first1||!first2||!partner)return;
+var eligible=t.players.filter(function(p){return p!==joker;});
+var old1=first1.value,old2=first2.value,oldPartner=partner.value;
+first1.innerHTML=opts(eligible.filter(function(p){return p!==old2;}));
+first2.innerHTML=opts(eligible.filter(function(p){return p!==old1;}));
+if(eligible.indexOf(old1)!==-1)first1.value=old1;
+if(eligible.indexOf(old2)!==-1&&old2!==first1.value)first2.value=old2;
+var partnerChoices=eligible.filter(function(p){return p!==old1&&p!==old2;});
+partner.innerHTML=opts(partnerChoices);
+if(partnerChoices.indexOf(oldPartner)!==-1)partner.value=oldPartner;
+}
+function table(t){
+var rows=t.rows||[];
+var cols=['Player'];
+for(var i=0;i<rows.length;i++){cols.push('Match '+(i+1));}
+cols.push('Final total');
+var body=t.players.map(function(p){
+var vals=rows.map(function(r){return r.points[p]||0;});
+var sum=vals.reduce(function(a,b){return a+b;},0);
+var tds=vals.map(function(v){return '<td class="'+(v>0?'good':(v<0?'bad':''))+'">'+fmt(v)+'</td>';}).join('');
+return '<tr><td>'+esc(p)+'</td>'+tds+'<td><b>'+fmt(sum)+'</b></td></tr>';
+}).join('');
+var totals=rows.map(function(r){return Object.values(r.points).reduce(function(a,b){return a+b;},0);});
+var grand=t.players.reduce(function(s,p){return s+(t.points[p]||0);},0);
+var theadCols=cols.map(function(c){return '<th>'+c+'</th>';}).join('');
+var totalsCells=totals.map(function(v){return '<th class="'+(v===0?'zero':'bad')+'">'+fmt(v)+'</th>';}).join('');
+var matchesPlayed=rows.map(function(r,i){return '<div class="player"><b>Match '+(i+1)+':</b> '+esc(r.label)+'<br><span class="muted">'+esc(r.winner)+'</span></div>';}).join('');
+return '<div class="card"><h3>'+esc(t.name)+' - Match ledger</h3><div class="tablewrap"><table><thead><tr>'+theadCols+'</tr></thead><tbody>'+body+'<tr><th>Match total</th>'+totalsCells+'<th class="'+(grand===0?'zero':'bad')+'">'+fmt(grand)+'</th></tr></tbody></table></div><p class="note">Every match and the final tournament total should equal 0.</p><h3>Matches played</h3>'+matchesPlayed+'</div>';
+}
+function complete(t,rows){
+t.rows=rows;
+t.points={};
+t.players.forEach(function(p){t.points[p]=rows.reduce(function(s,r){return s+(r.points[p]||0);},0);});
+t.status='Completed';
+t.total=Object.values(t.points).reduce(function(a,b){return a+b;},0);
+db.events.push(t);
+db.current=null;
+save();
+tab('history');
+alert('Tournament saved. Final total: '+fmt(t.total));
+}
+$('pick').onchange=function(e){
+if(e.target.dataset.pick){
+var p=e.target.dataset.pick;
+if(e.target.checked){selected.add(p);}else{selected.delete(p);}
+$('pickCount').textContent=selected.size+' selected';
+$('start').disabled=selected.size<4||!!db.current;
+}
+};
+$('add').onclick=function(){
+var p=$('newPlayer').value.trim();
+if(!p)return;
+var exists=db.players.some(function(x){return x.toLowerCase()===p.toLowerCase();});
+if(exists)return alert('Player already exists');
+db.players.push(p);
+$('newPlayer').value='';
+save();
+};
+$('newPlayer').onkeydown=function(e){if(e.key==='Enter')$('add').click();};
+$('plist').onclick=function(e){
+var renameBtn=e.target.closest('[data-rename]');
+if(renameBtn){
+var old=renameBtn.getAttribute('data-rename');
+var nn=prompt('Rename "'+old+'" to:',old);
+if(nn===null)return;
+renamePlayer(old,nn);
+return;
+}
+var delBtn=e.target.closest('[data-delpl]');
+if(delBtn){
+var nm=delBtn.getAttribute('data-delpl');
+deletePlayer(nm);
+return;
+}
+};
+$('start').onclick=function(){
+var ps=Array.from(selected);
+var mode=ps.length%2?'Joker':(ps.length===6?'Trio':(ps.length===8?'Semis':'Even'));
+db.current={id:Date.now(),name:$('name').value.trim()||'Tournament '+(db.events.length+1),players:ps,mode:mode,date:new Date().toLocaleDateString()};
+selected.clear();
+save();
+};
+$('activePanel').onchange=function(e){
+var t=db.current;
+var id=e.target.id;
+if(['winner1','winner2','loser1','loser2'].indexOf(id)!==-1){
+if(t&&t.players.length===8){refreshQuadDropdowns();}else{refreshEvenDropdowns();updateFinalTeamInfo();}
+}
+if(['winner3','winner4'].indexOf(id)!==-1){refreshQuadDropdowns();}
+if(['joker7','m1w1','m1w2','m1l1','m1l2'].indexOf(id)!==-1){refreshSevenDropdowns();}
+if(['joker','first1','first2'].indexOf(id)!==-1){refreshJokerDropdowns();}
+};
+$('activePanel').onclick=function(e){
+var action=e.target.closest('button');
+if(!action)return;
+var t=db.current;
+if(!t)return;
+if(action.id==='cancel'){
+if(confirm('Cancel this tournament?')){db.current=null;save();}
+return;
+}
+if(action.id==='finishEven'){
+var a=$('winner1').value,b=$('winner2').value,c=$('loser1').value,d=$('loser2').value;
+if(!a||!b||!c||!d||(new Set([a,b,c,d])).size!==4||[a,b,c,d].some(function(p){return t.players.indexOf(p)===-1;})){return alert('Select four different players: two winners and two losers');}
+var val=(t.players.length-2)*25/2;
+var pts={};
+t.players.forEach(function(p){pts[p]=0;});
+pts[a]=val;pts[b]=val;pts[c]=-val;pts[d]=-val;
+var rows=[{label:a+' + '+b+' vs '+c+' + '+d,winner:a+' + '+b,points:pts}];
+complete(t,rows);
+}
+if(action.id==='finishTrio'){
+var a=$('winner1').value,b=$('winner2').value,c=$('loser1').value,d=$('loser2').value,fw=$('finalWinner').value;
+if(!a||!b||!c||!d||(new Set([a,b,c,d])).size!==4||[a,b,c,d].some(function(p){return t.players.indexOf(p)===-1;})){return alert('Select four different players for Match 1: two winners and two losers');}
+var finalTeam=t.players.filter(function(p){return [a,b,c,d].indexOf(p)===-1;});
+if(finalTeam.length!==2)return alert('Final team could not be determined; select four different Match 1 players');
+if(!fw)return alert('Select the final match winner');
+var e2=finalTeam[0],f2=finalTeam[1];
+var r1={};t.players.forEach(function(p){r1[p]=0;});
+var r2={};t.players.forEach(function(p){r2[p]=0;});
+var label2,winnerLabel2;
+if(fw==='round1'){
+r2[a]=50;r2[b]=50;r2[c]=-25;r2[d]=-25;r2[e2]=-25;r2[f2]=-25;
+label2=a+' + '+b+' vs '+e2+' + '+f2;winnerLabel2=a+' + '+b;
+}else{
+r2[e2]=50;r2[f2]=50;r2[a]=-25;r2[b]=-25;r2[c]=-25;r2[d]=-25;
+label2=e2+' + '+f2+' vs '+a+' + '+b;winnerLabel2=e2+' + '+f2;
+}
+var rows=[{label:a+' + '+b+' vs '+c+' + '+d,winner:a+' + '+b,points:r1},{label:label2,winner:winnerLabel2,points:r2}];
+complete(t,rows);
+}
+if(action.id==='finishQuad'){
+var a=$('winner1').value,b=$('winner2').value,c=$('loser1').value,d=$('loser2').value;
+if(!a||!b||!c||!d||(new Set([a,b,c,d])).size!==4||[a,b,c,d].some(function(p){return t.players.indexOf(p)===-1;})){return alert('Select four different players for Semifinal 1: two winners and two losers');}
+var sf2Group=t.players.filter(function(p){return [a,b,c,d].indexOf(p)===-1;});
+if(sf2Group.length!==4)return alert('Semifinal 2 group could not be determined; select four different Semifinal 1 players');
+var e2=$('winner3').value,f2=$('winner4').value;
+if(!e2||!f2||e2===f2||sf2Group.indexOf(e2)===-1||sf2Group.indexOf(f2)===-1){return alert('Select two different Semifinal 2 winners from the Semifinal 2 group');}
+var sf2Losers=sf2Group.filter(function(p){return p!==e2&&p!==f2;});
+if(sf2Losers.length!==2)return alert('Semifinal 2 losers could not be determined');
+var g2=sf2Losers[0],k2=sf2Losers[1];
+var fw=$('finalWinner').value;
+if(!fw)return alert('Select the final winner');
+var r1={};t.players.forEach(function(p){r1[p]=0;});
+var r2={};t.players.forEach(function(p){r2[p]=0;});
+var r3={};t.players.forEach(function(p){r3[p]=0;});
+var finalLabel,finalWinnerLabel;
+if(fw==='sf1'){
+r3[a]=75;r3[b]=75;
+[c,d,e2,f2,g2,k2].forEach(function(p){r3[p]=-25;});
+finalLabel=a+' + '+b+' vs '+e2+' + '+f2;finalWinnerLabel=a+' + '+b;
+}else{
+r3[e2]=75;r3[f2]=75;
+[a,b,c,d,g2,k2].forEach(function(p){r3[p]=-25;});
+finalLabel=e2+' + '+f2+' vs '+a+' + '+b;finalWinnerLabel=e2+' + '+f2;
+}
+var rows=[{label:a+' + '+b+' vs '+c+' + '+d,winner:a+' + '+b,points:r1},{label:e2+' + '+f2+' vs '+g2+' + '+k2,winner:e2+' + '+f2,points:r2},{label:finalLabel,winner:finalWinnerLabel,points:r3}];
+complete(t,rows);
+}
+if(action.id==='finishSeven'){
+var joker=$('joker7').value;
+var w1=$('m1w1').value,w2=$('m1w2').value,l1=$('m1l1').value,l2=$('m1l2').value;
+if(!joker||!w1||!w2||!l1||!l2||(new Set([joker,w1,w2,l1,l2])).size!==5){return alert('Select a Joker and four different Match 1 players, all different from the Joker');}
+var sitOut=t.players.filter(function(p){return p!==joker&&[w1,w2,l1,l2].indexOf(p)===-1;});
+if(sitOut.length!==2)return alert('Could not determine the two sat-out players; check your selections');
+var e2=sitOut[0],f2=sitOut[1];
+var partner=$('jokerPartner').value;
+if(!partner||[l1,l2].indexOf(partner)===-1){return alert('Select which Match 1 loser partners with the Joker for Match 2');}
+var m2w=$('m2Winner').value;
+if(!m2w)return alert('Select the Match 2 winner');
+var fw=$('finalWinner7').value;
+if(!fw)return alert('Select the Final winner');
+var team1=[e2,f2];
+var team2=[joker,partner];
+var m2WinnersArr=(m2w==='team1')?team1:team2;
+var m1WinnersArr=[w1,w2];
+var finalWinnersArr=(fw==='match1')?m1WinnersArr:m2WinnersArr;
+var r1={};t.players.forEach(function(p){r1[p]=0;});
+var r2={};t.players.forEach(function(p){r2[p]=0;});
+var r3={};t.players.forEach(function(p){r3[p]=-25;});
+if(m2w==='team2'){
+if(fw==='match2'){
+r3[joker]=75;r3[partner]=50;
+}else{
+r3[w1]=75;r3[w2]=75;r3[partner]=-50;
+}
+}else{
+finalWinnersArr.forEach(function(p){r3[p]=75;});
+r3[partner]=-50;
+}
+t.jokerName=joker;
+var m1Label=w1+' + '+w2+' vs '+l1+' + '+l2;
+var m2Label=team1.join(' + ')+' vs '+team2.join(' + ');
+var m2WinnerLabel=m2WinnersArr.join(' + ');
+var finalLabel=m1WinnersArr.join(' + ')+' vs '+m2WinnersArr.join(' + ');
+var finalWinnerLabel=finalWinnersArr.join(' + ');
+var rows=[{label:m1Label,winner:w1+' + '+w2,points:r1},{label:m2Label,winner:m2WinnerLabel,points:r2},{label:finalLabel,winner:finalWinnerLabel,points:r3}];
+complete(t,rows);
+}
+if(action.id==='finishOdd'){
+var j=$('joker').value,a=$('first1').value,b=$('first2').value,p=$('partner').value,c=$('challenge').value;
+if(!j||!a||!b||!p||!c||(new Set([j,a,b,p])).size!==4){return alert('Select distinct Joker, first winners and partner, plus challenge winner');}
+var others=t.players.filter(function(x){return x!==j;});
+var initialLosers=others.filter(function(x){return x!==a&&x!==b;});
+if(initialLosers.length!==2)return alert('For this Joker flow, select exactly 5 participants: one Joker and four players for the two-round match.');
+var r1={};t.players.forEach(function(x){r1[x]=0;});
+r1[a]=25;r1[b]=25;
+initialLosers.forEach(function(x){r1[x]=-25;});
+var r2={};t.players.forEach(function(x){r2[x]=0;});
+if(c==='joker'){
+var n=t.players.length;
+var jokerAward=((n-1)/2)*25,partnerAward=((n-3)/2)*25;
+r2[j]=jokerAward;r2[p]=partnerAward+25;r2[a]=-50;r2[b]=-50;
+}else{
+r2[a]=25;r2[b]=25;r2[j]=-25;r2[p]=-25;
+}
+t.jokerName=j;
+var rows=[{label:a+' + '+b+' vs '+initialLosers.join(' + '),winner:a+' + '+b,points:r1},{label:j+' (Joker) + '+p+' vs '+a+' + '+b,winner:(c==='joker'?j+' + '+p:a+' + '+b),points:r2}];
+complete(t,rows);
+}
+};
+$('hist').onclick=function(e){
+var id=e.target.dataset.detail;
+if(id){var box=$('detail-'+id);if(box)box.classList.toggle('hidden');return;}
+var del=e.target.dataset.delete;
+if(del){
+var t=db.events.find(function(x){return String(x.id)===del;});
+if(!t)return;
+if(confirm('Delete '+t.name+'? Its points will also be removed from the overall leaderboard. Export a backup first if needed.')){
+db.events=db.events.filter(function(x){return String(x.id)!==del;});
+save();
+}
+return;
+}
+};
+$('export').onclick=function(){
+var b=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+var u=URL.createObjectURL(b);
+var a=document.createElement('a');
+a.href=u;a.download='smash-club-backup.json';a.click();
+URL.revokeObjectURL(u);
+};
+$('import').onclick=function(){$('file').click();};
+$('file').onchange=async function(e){
+try{
+var d=JSON.parse(await e.target.files[0].text());
+if(!Array.isArray(d.players)||!Array.isArray(d.events))throw 0;
+if(confirm('Replace current data with backup?')){db=d;save();}
+}catch(x){alert('Invalid backup');}
+e.target.value='';
+};
+render();
+</script></body></html>
